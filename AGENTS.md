@@ -12,7 +12,9 @@ Preserve unrelated changes and read deeper instructions before editing a subdire
 
 Before changing repository boundaries, dependencies, shared schemas, provenance, or application
 integration, read the MarineCast [infrastructure guide](https://github.com/MarineCast/.github/blob/HEAD/INFRASTRUCTURE.md).
-In the multi-repository workspace, the local copy is `../../.github/INFRASTRUCTURE.md`.
+Resolve local paths from this toolkit's checkout root, not the agent's working directory.
+For `MarineCast/Toolkits/toolkit-*`, use `../../.github/INFRASTRUCTURE.md`;
+for a flat `MarineCast/toolkit-*` layout, use `../.github/INFRASTRUCTURE.md`.
 Prefer that local copy when present; in an independent checkout, read the linked document. If it
 cannot be retrieved, report that limitation and use the local contracts below; do not invent a
 shared standard. These instructions explicitly request that reading; a sibling repository's
