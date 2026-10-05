@@ -38,13 +38,23 @@ def main(argv: list[str] | None = None) -> int:
     positions, rejected = [], []
     try:
         with args.path.open(newline="", encoding="utf-8") as stream:
-            reader = csv.DictReader(stream)
-            adapter.validate_headers(reader.fieldnames or ())
-            for row_number, row in enumerate(reader, 2):
-                if row_number - 1 > args.max_rows:
+            reader = csv.reader(stream, strict=True)
+            headers = next(reader, [])
+            adapter.validate_headers(headers)
+            record_count = 0
+            while True:
+                row_number = reader.line_num + 1
+                values = next(reader, None)
+                if values is None:
+                    break
+                if not values:
+                    continue  # Blank physical lines are not records, but retain their offsets.
+                record_count += 1
+                if record_count > args.max_rows:
                     raise ValueError("row cap exceeded: no partial-success report")
-                if None in row or any(v is None for v in row.values()):
-                    raise ValueError("malformed CSV row width")
+                if len(values) != len(headers):
+                    raise ValueError(f"malformed CSV row width at physical line {row_number}")
+                row = dict(zip(headers, values, strict=True))
                 source = Provenance(
                     adapter.provider,
                     args.era,

@@ -1,5 +1,6 @@
 """Pure header-based NOAA parsers. No network, decompression or source ordering."""
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from math import isfinite
@@ -9,6 +10,11 @@ from .contracts import ParseResult, Position, Provenance, utc
 
 DICTIONARY_VERSION = "NOAA-2026-07-31"
 ADAPTER_VERSION = "marinecadastre/0.1"
+# Full source event time, to the precision supported by datetime; never fill components.
+TIMESTAMP_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})?"
+)
 LEGACY_HEADERS = (
     "MMSI",
     "BaseDateTime",
@@ -125,7 +131,10 @@ class MarineCadastreAdapter:
         if len(mmsi) != 9 or not mmsi.isascii() or not mmsi.isdigit():
             reasons.append("invalid_mmsi")
         try:
-            timestamp = datetime.fromisoformat(get("time"))
+            time_text = get("time")
+            if TIMESTAMP_PATTERN.fullmatch(time_text) is None:
+                raise ValueError("full event date/time through seconds required")
+            timestamp = datetime.fromisoformat(time_text)
             if timestamp.tzinfo is None:
                 if self.naive_time_policy == "reject":
                     raise ValueError("naive")

@@ -47,6 +47,13 @@ to 0–99.9; legacy AIS 102.3 sentinel becomes unknown, never zero. Unknown vess
 equipment classes survive. Vessel function mapping is caller-supplied and versioned;
 there is no default behavior, fishing or whale-watch classification.
 
+Event timestamps require `YYYY-MM-DDTHH:MM:SS`, optionally 1–6 fractional digits and
+`Z` or a `±HH:MM` offset. Dictionary UTC policy supplies only the zone; it never invents
+time components. Greater-than-microsecond precision is rejected pending a native contract
+that can preserve it. CSV provenance records the physical starting line of each record,
+including quoted multiline values and blank-line offsets; the inspection cap counts
+nonempty records rather than physical lines.
+
 ## Track boundaries and synthetic validation
 
 `TrackConfig.max_gap_seconds` must be supplied; candidate limits are sensitivity settings,
@@ -79,6 +86,13 @@ hours and mean supported concurrency. Distinct counts use unions, SOG combines i
 and denominators, and stationary intervals retain time with zero distance. None of these
 aggregates is computed by this release. Unsupported values must be null with a reason;
 empty reception is not evidence of empty water.
+
+Reported SOG reduction uses summed knot-seconds divided by summed speed-supported
+seconds, yielding knots. Unknown-speed time is excluded from that denominator and retained
+as unknown support. An hours-based view converts both numerator and denominator by 3600:
+knot-hours divided by supported hours. Zero supported seconds yields null. The synthetic
+10-knot/20-knot/unknown example over three one-minute pieces has 1800 knot-seconds and
+120 supported seconds, hence 15 knots; it does not divide by the full three-minute window.
 
 The exact shared [v0.1 manifest schema](https://github.com/MarineCast/.github/blob/main/contracts/product-manifest.schema.json)
 and [application delivery profile](https://github.com/MarineCast/.github/blob/main/contracts/application-delivery-profile.md)

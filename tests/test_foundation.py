@@ -1,6 +1,7 @@
 """Entirely synthetic/offline; no real vessel identities or private AIS records."""
 
 import csv
+import json
 import subprocess
 import sys
 from dataclasses import replace
@@ -31,6 +32,7 @@ from ais_toolkit.contracts import (
     Provenance,
     validate_export_batch,
 )
+from ais_toolkit.metrics import METRICS
 from ais_toolkit.processing import ProcessingManifest
 from ais_toolkit.sources import SourcePartition
 from ais_toolkit.tracks import (
@@ -111,6 +113,30 @@ def test_timestamp_naive_policy_and_utc_conversion():
     assert accepted.timestamp == START
     assert "source_dictionary_utc_assumed" in accepted.quality_flags
     assert parsed(base_date_time="2025-01-01T01:00:00+01:00").position.timestamp == START
+
+
+@pytest.mark.parametrize(
+    "era,year,key", (("2018-2024", "2020", "BaseDateTime"), ("2025+", "2025", "base_date_time"))
+)
+@pytest.mark.parametrize("suffix", ("", "T12", "T12:30", "T12:30Z", "T12:30:00.1234567"))
+def test_incomplete_or_unsupported_timestamp_precision_rejected(era, year, key, suffix):
+    values = row(era, **{key: f"{year}-01-01{suffix}"})
+    result = MarineCadastreAdapter(era, "dictionary_utc").parse(values, source(era))
+    assert result.position is None
+    assert "invalid_or_naive_timestamp" in result.rejection_reasons
+
+
+@pytest.mark.parametrize(
+    "era,year,key", (("2018-2024", "2020", "BaseDateTime"), ("2025+", "2025", "base_date_time"))
+)
+@pytest.mark.parametrize("offset", ("", "Z", "+01:00"))
+def test_full_source_timestamp_precision_and_supported_fractions(era, year, key, offset):
+    values = row(era, **{key: f"{year}-01-01T01:02:03.123456{offset}"})
+    result = MarineCadastreAdapter(era, "dictionary_utc").parse(values, source(era))
+    assert result.position.timestamp.microsecond == 123456
+    assert result.position.timestamp.second == 3
+    assert result.position.timestamp.minute == 2
+    assert ("source_dictionary_utc_assumed" in result.position.quality_flags) == (offset == "")
 
 
 @pytest.mark.parametrize(
@@ -225,6 +251,39 @@ def test_stationary_time_and_distance_conservation_independent_fixture():
             seconds_tolerance=0,
             km_tolerance=0,
         )
+
+
+def test_sog_integral_units_and_unknown_speed_exclusion():
+    # Three one-minute pieces: 10 knots, 20 knots, then unknown speed.
+    # Supported mean = (10 + 20) / 2 = 15 knots, with 2/60 hour speed support.
+    parts = [
+        Contribution(
+            "i",
+            "synthetic",
+            "cell",
+            START + timedelta(seconds=60 * index),
+            START + timedelta(seconds=60 * (index + 1)),
+            0,
+            0 if speed is None else 60,
+            None if speed is None else speed * 60,
+            "synthetic",
+        )
+        for index, speed in enumerate((10, 20, None))
+    ]
+    knot_seconds = sum(p.reported_sog_integral_knot_seconds or 0 for p in parts)
+    supported_seconds = sum(p.speed_supported_seconds for p in parts)
+    assert knot_seconds == 1800
+    assert supported_seconds == 120
+    assert knot_seconds / supported_seconds == 15
+    # Convert BOTH quantities when presenting an hours-based companion.
+    knot_hours, supported_hours = knot_seconds / 3600, supported_seconds / 3600
+    assert knot_hours == 0.5
+    assert supported_hours == pytest.approx(1 / 30)
+    assert knot_hours / supported_hours == 15
+    metric = next(m for m in METRICS if m.name == "reported_sog_time_weighted_knots")
+    assert metric.unit == "knots"
+    assert "knot-seconds" in metric.definition and "seconds" in metric.denominator
+    assert "zero supported seconds yields null" in metric.reduction
 
 
 def coverage():
@@ -383,6 +442,33 @@ def test_cli_quarantines_malformed_empty_and_row_cap(tmp_path, capsys):
         == 2
     )
     assert "no partial-success" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("blank_between,second_line", ((False, 4), (True, 5)))
+def test_cli_physical_record_start_lines_and_record_based_cap(
+    tmp_path, monkeypatch, capsys, blank_between, second_line
+):
+    fixture = tmp_path / "multiline.csv"
+    with fixture.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=CURRENT_HEADERS)
+        writer.writeheader()
+        writer.writerow(row(vessel_name="SYNTHETIC\nNAME"))
+        if blank_between:
+            stream.write("\n")
+        writer.writerow(row(latitude="91"))
+    seen = []
+    original = MarineCadastreAdapter.parse
+
+    def capture(adapter, values, provenance):
+        seen.append(provenance.row_number)
+        return original(adapter, values, provenance)
+
+    monkeypatch.setattr(MarineCadastreAdapter, "parse", capture)
+    assert main(["validate-csv", str(fixture), "--era", "2025+", "--max-rows", "2"]) == 1
+    assert seen == [2, second_line]
+    report = json.loads(capsys.readouterr().out)
+    assert report["accepted_rows"] == 1
+    assert report["rejected_rows"] == [{"row_number": second_line, "reasons": ["invalid_lat"]}]
 
 
 def test_fixture_parse_and_module_entrypoint():

@@ -52,9 +52,11 @@ METRICS = tuple(
             "reported_sog_time_weighted_knots",
             "knots",
             "reported_speed_reduction",
-            "Reported SOG integral / speed-supported hours using declared endpoint policy",
-            "speed-supported hours; retain unknown-speed hours",
-            "sum integrals / sum denominators",
+            "Sum reported SOG integrals (knot-seconds) / sum speed-supported seconds; "
+            "using declared endpoint policy",
+            "speed-supported seconds; unknown-speed intervals excluded; "
+            "divide seconds by 3600 only when reporting support hours",
+            "sum knot-seconds / sum supported seconds = knots; zero supported seconds yields null",
         ),
         (
             "speed_band_hours",
