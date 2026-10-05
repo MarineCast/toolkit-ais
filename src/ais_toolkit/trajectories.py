@@ -31,7 +31,7 @@ from .ingestion import (
     verified_receipt,
 )
 
-METHOD = "estimated-local-trajectories/0.1"
+METHOD = "estimated-local-trajectories/0.2"
 SCHEMA_VERSION = "ais-contributions/0.1"
 ARTIFACTS = ("intervals.parquet", "contributions.parquet", "points.parquet", "state.parquet")
 SOFTWARE = {
@@ -376,10 +376,6 @@ def process_tracks(
         utc(datetime.fromisoformat(source["core_start"])),
         utc(datetime.fromisoformat(source["core_end"])),
     )
-    halo_start, halo_end = (
-        utc(datetime.fromisoformat(source["halo_start"])),
-        utc(datetime.fromisoformat(source["halo_end"])),
-    )
     # Incoming audit must retain every intermediate fix. No qualified halo -> no invented support.
     geometry = LocalGeometry(config, geometry_document)
     policy = fingerprint(
@@ -488,8 +484,10 @@ def process_tracks(
                 if len(mmsi) != 9 or not mmsi.isascii() or not mmsi.isdigit():
                     continue  # No claimed identity/interval; original evidence remains in input audit.
                 when = timestamp(row)
-                if row["outcome"] == "duplicate" or (when and not halo_start <= when < halo_end):
+                if row["outcome"] == "duplicate":
                     continue
+                # Even outside-halo rejected/filtered fixes are known original barriers.
+                # Carry context can predate the halo; dropping these would create a bridge.
                 db.execute(
                     "INSERT INTO events VALUES (?,?,?,?)",
                     (row["record_key"], mmsi, row["timestamp"], canonical(row)),

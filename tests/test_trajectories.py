@@ -672,3 +672,45 @@ def test_provenance_versions_and_cell_aliases_are_not_valid_configuration():
         replace(cfg, center_longitude=True)
     with pytest.raises(ValueError, match="Git SHA"):
         replace(cfg, producer_git_sha=list("e" * 40))
+
+
+@pytest.mark.parametrize("kind", ("conflict", "filtered"))
+def test_known_outside_halo_barrier_cannot_be_skipped_between_carry_and_core(tmp_path, kind):
+    cfg = config()
+    prior = local(tmp_path, "prior", [sample(cfg, 0, 0, 86310)])  # 90 seconds before new core.
+    first_source = ingest([prior], ingestion_config(), tmp_path / "first-source")
+    first = process_tracks(first_source, cfg, document(cfg), tmp_path / "first")
+    if kind == "conflict":
+        intervening = [sample(cfg, 20, 0, 86325), sample(cfg, 30, 0, 86325)]
+    else:
+        intervening = [
+            row(longitude="25", base_date_time=(START + timedelta(seconds=86325)).isoformat())
+        ]
+    new = local(
+        tmp_path, "new", intervening + [sample(cfg, 100, 0, 86430), sample(cfg, 200, 0, 86460)]
+    )
+    next_cfg = ingestion_config(
+        partition_id="next",
+        core_start=START + timedelta(days=1),
+        core_end=START + timedelta(days=2),
+        halo_start=START + timedelta(days=1, minutes=-1),
+        halo_end=START + timedelta(days=2, minutes=1),
+    )
+    source = ingest([new], next_cfg, tmp_path / "source", first_source)
+    output = process_tracks(
+        source,
+        cfg,
+        document(cfg),
+        tmp_path / "out",
+        ingestion_carry_directory=first_source,
+        carried_directory=first,
+    )
+    ledger = table(output, "intervals")
+    assert ledger[0]["outcome"] == "rejected"
+    assert "original_adjacency_barrier" in ledger[0]["reasons"]
+    # Neither known conflict nor filtered fix, both outside halo, disappears into a 30s bridge.
+    assert sum(p["seconds"] for p in table(output, "contributions")) == 30
+    assert all(
+        p["start"] >= START + timedelta(seconds=86430) for p in table(output, "contributions")
+    )
+    assert table(output, "state")[0]["barrier_seen"]

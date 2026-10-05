@@ -6,7 +6,8 @@ scientific defaults, generate final daily wide products or qualify ecological us
 All fixtures are fabricated. Hidden-fix interpolation accuracy, realistic memory/runtime,
 source rights/coverage, Canadian access and regional products remain separate gates.
 
-The native method is `estimated-local-trajectories/0.1`, schema `ais-contributions/0.1`.
+The native method is `estimated-local-trajectories/0.2`, schema `ais-contributions/0.1`.
+Older-method trajectory checkpoints must be regenerated; they are not silently reused.
 Four closed Parquet artifacts carry method/schema metadata and checksums:
 
 - `intervals.parquet`: accepted **estimates** and rejected original adjacencies, with
@@ -113,7 +114,8 @@ checks, not empirical AIS interpolation accuracy or a certified production error
 ## Adjacency, barriers, land and checkpoint ownership
 
 The full audit is spilled into SQLite, ordered by MMSI/exact UTC/source row. Original
-rejected or filtered intermediate events remain adjacency barriers; duplicates alone
+rejected or filtered intermediate events remain adjacency barriers, **including known-time
+rows outside the halo** that may lie between a carried endpoint and the new core; duplicates alone
 are skipped. Conflicts, changed known IMO, gaps and implied-speed jumps reject intervals
 and start new unresolved source-MMSI episodes. An episode is a traceable evidence group,
 not a resolved physical vessel. A wholly invalid Phase 2 fix has no normalized timestamp;
