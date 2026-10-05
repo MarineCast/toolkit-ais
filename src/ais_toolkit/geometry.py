@@ -19,7 +19,7 @@ class LocalProjection:
     max_relative_metric_error: float
 
     def __post_init__(self):
-        if not all(isfinite(v) for v in vars(self).values()):
+        if not all(not isinstance(v, bool) and isfinite(v) for v in vars(self).values()):
             raise ValueError("finite projection parameters required")
         if not -178 <= self.longitude <= 178 or not -74 <= self.latitude <= 74:
             raise ValueError("antimeridian/polar projection unsupported")
@@ -108,7 +108,10 @@ class LocalGeometry:
             "cells",
         }:
             raise ValueError("explicit geometry versions/AOI/land/support/cells required")
-        if not document["domain_version"] or not document["water_mask_version"]:
+        if not all(
+            isinstance(document[k], str) and document[k].strip()
+            for k in ("domain_version", "water_mask_version")
+        ):
             raise ValueError("geometry evidence versions required")
         self.config = config
         self.projection = LocalProjection(
@@ -130,8 +133,14 @@ class LocalGeometry:
         self.cells = sorted(cells)
         self.polygons = []
         for cell in self.cells:
-            if not h3.is_valid_cell(cell) or h3.get_resolution(cell) != config.resolution:
+            if (
+                not isinstance(cell, str)
+                or not h3.is_valid_cell(cell)
+                or h3.get_resolution(cell) != config.resolution
+            ):
                 raise ValueError("direct R6/R7 cells at selected resolution required")
+            if h3.int_to_str(h3.str_to_int(cell)) != cell:
+                raise ValueError("canonical lower-case H3 cell IDs required")
             coords = [self.projection.forward(lon, lat) for lat, lon in h3.cell_to_boundary(cell)]
             polygon = Polygon(coords)
             if not polygon.is_valid:

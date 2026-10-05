@@ -656,3 +656,19 @@ def test_filtered_fix_remains_adjacency_barrier_and_mutation_quarantines(tmp_pat
         process_tracks(source, cfg, document(cfg), tmp_path / "mutated")
     assert not list((tmp_path / "mutated").glob("*/complete.json"))
     assert list((tmp_path / "mutated").glob(".staging-*/failure.json"))
+
+
+def test_provenance_versions_and_cell_aliases_are_not_valid_configuration():
+    cfg = config()
+    doc = document(cfg)
+    doc["domain_version"] = True
+    with pytest.raises(ValueError, match="evidence versions"):
+        LocalGeometry(cfg, doc)
+    doc = document(cfg)
+    doc["cells"].append(doc["cells"][0].upper())
+    with pytest.raises(ValueError, match="canonical"):
+        LocalGeometry(cfg, doc)
+    with pytest.raises(ValueError, match="finite projection"):
+        replace(cfg, center_longitude=True)
+    with pytest.raises(ValueError, match="Git SHA"):
+        replace(cfg, producer_git_sha=list("e" * 40))

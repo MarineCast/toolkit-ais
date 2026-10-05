@@ -53,7 +53,7 @@ no default thresholds, resolution, real domain or local clock. Required fields a
 | `producer_git_sha` | Full lower-case 40-character software revision |
 
 Geometry requires `domain_version`, `water_mask_version`, `aoi`, `land`, `mask_support`
-and explicit unique `cells`. Polygon/MultiPolygon GeoJSON coordinates are longitude,
+and explicit unique canonical lower-case `cells`. Geometry version labels must be nonempty text. Polygon/MultiPolygon GeoJSON coordinates are longitude,
 latitude; **ring edges mean short spherical great-circle segments**. Holes and islands
 are retained. Empty land is allowed only as an explicit caller assertion within the
 supplied mask-support polygon; it is not inferred from missing geometry. Version labels

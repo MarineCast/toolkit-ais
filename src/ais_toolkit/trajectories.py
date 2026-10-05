@@ -100,8 +100,10 @@ class TrajectoryConfig:
             value = getattr(self, name)
             if type(value) is not int or not 0 < value <= maximum:
                 raise ValueError(f"explicit positive {name} cap <= {maximum} required")
-        if len(self.producer_git_sha) != 40 or any(
-            c not in "0123456789abcdef" for c in self.producer_git_sha
+        if (
+            not isinstance(self.producer_git_sha, str)
+            or len(self.producer_git_sha) != 40
+            or any(c not in "0123456789abcdef" for c in self.producer_git_sha)
         ):
             raise ValueError("full producer Git SHA required")
         LocalProjection(
