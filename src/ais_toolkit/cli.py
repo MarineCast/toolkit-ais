@@ -1,4 +1,4 @@
-"""Explicit offline inspection commands; no acquisition or processing side effects."""
+"""Explicit local inspection and ingestion commands; no acquisition."""
 
 import argparse
 import csv
@@ -18,6 +18,14 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("inspect-catalog", help="show catalog evidence and capability gates")
     commands.add_parser("inspect-metrics", help="show definitions, units and reductions")
+    ingestion = commands.add_parser(
+        "ingest-local", help="offline local CSV/CSV.zst to private native Parquet"
+    )
+    ingestion.add_argument("job", type=Path)
+    ingestion.add_argument("output", type=Path)
+    ingestion.add_argument(
+        "--carried", type=Path, help="previous verified adjacent-core ingestion directory"
+    )
     validate = commands.add_parser("validate-csv", help="bounded, offline CSV contract inspection")
     validate.add_argument("path", type=Path)
     validate.add_argument("--era", choices=("2018-2024", "2025+"), required=True)
@@ -26,6 +34,37 @@ def main(argv: list[str] | None = None) -> int:
     )
     validate.add_argument("--max-rows", type=int, default=10000)
     args = parser.parse_args(argv)
+    if args.command == "ingest-local":
+        import sqlite3
+
+        import zstandard as zstd
+
+        from .ingestion import ingest, load_job
+
+        try:
+            inputs, config = load_job(args.job)
+            completed = ingest(inputs, config, args.output, args.carried)
+            print(
+                json.dumps(
+                    {
+                        "status": "complete",
+                        "native_directory": str(completed),
+                        "scope": "offline ingestion; no tracks or final H3 products",
+                    }
+                )
+            )
+            return 0
+        except (
+            OSError,
+            ValueError,
+            TypeError,
+            KeyError,
+            csv.Error,
+            zstd.ZstdError,
+            sqlite3.Error,
+        ) as error:
+            print(json.dumps({"status": "failed", "reason": str(error)}))
+            return 2
     if args.command == "inspect-catalog":
         print(json.dumps([asdict(s) for s in CATALOG], indent=2))
         return 0

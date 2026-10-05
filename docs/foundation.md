@@ -1,10 +1,15 @@
 # Foundation milestone: native contract version ais-native/0.1
 
-This implements the bounded foundation from the [core design](https://chatgpt.com/space/page_ebb0dab5d82881919c98310c9a011ddc)
+This describes the bounded foundation from the [core design](https://chatgpt.com/space/page_ebb0dab5d82881919c98310c9a011ddc)
 and [implementation plan](https://chatgpt.com/space/page_5a867c6287d08191a837f84676135248).
 Typed frozen dataclasses and their constructor checks are the executable native schemas;
 they are not a promise of validated movement science or a shared manifest adoption.
 No existing legacy data is read, removed, migrated or recertified.
+
+The subsequent [offline ingestion milestone](ingestion.md) implements local CSV/CSV.zst
+reading, disk-spilled reconciliation, private native Parquet, halo/carry state and atomic
+completion. Its implemented scope supersedes the ingestion/Parquet deferrals below; track
+science, exact allocation and final daily-product conformance remain deferred.
 
 ## Source evidence, checked 2026-10-05
 

@@ -60,3 +60,12 @@ or output semantics. Run `python -m pip install -e '.[dev]'`, `pytest -q`, `ruff
 The last command installs the wheel in a fresh temporary environment and runs synthetic
 tests outside the checkout. CI covers Python 3.11–3.14; local execution is separately reported.
 No source acquisition, full track engine, H3 allocation or consumer integration is implemented.
+
+## Offline ingestion (Phase 2)
+
+Read `docs/ingestion.md` before changing local ingestion, receipt/carry semantics or failure
+handling. Local CSV/CSV.zst inputs remain explicitly provided; tests are synthetic only.
+Arrow/Zstandard are declared runtime dependencies. Build into a fresh output directory,
+e.g. `python -m build --outdir dist-current`, then run the wheel checker on that directory.
+For offline wheel validation, supply `--wheelhouse /chosen/wheels --offline-test-tools`.
+The output is native unresolved-identity evidence, not tracks, H3 or final application products.
