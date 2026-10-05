@@ -21,7 +21,7 @@ from .contracts import Provenance, utc
 from .processing import ProcessingManifest
 from .sources import SourcePartition
 
-METHOD = "offline-ingestion/0.1"
+METHOD = "offline-ingestion/0.2"
 SCHEMA_VERSION = "ais-ingestion/0.1"
 
 
@@ -196,6 +196,23 @@ def records(
             yield start, reader.line_num, dict(zip(headers, values, strict=True))
 
 
+def retained_signature(row: dict) -> str:
+    return fingerprint(
+        {
+            k: row[k]
+            for k in (
+                "longitude",
+                "latitude",
+                "sog_knots",
+                "raw_vessel_code",
+                "equipment_class",
+                "imo",
+                "quality_flags",
+            )
+        }
+    )
+
+
 SCHEMA = pa.schema(
     [
         ("record_key", pa.string()),
@@ -262,6 +279,8 @@ class BatchWriter:
 
 
 def verified_receipt(directory: Path) -> dict:
+    if directory.name.startswith(".staging-") or (directory / "failure.json").exists():
+        raise ValueError("failed/unpublished ingestion directory")
     receipt = strict_json(directory / "complete.json")
     if (
         receipt["status"] != "complete"
@@ -269,6 +288,8 @@ def verified_receipt(directory: Path) -> dict:
         or receipt["schema_version"] != SCHEMA_VERSION
     ):
         raise ValueError("incomplete/incompatible ingestion receipt")
+    if directory.name != receipt["run_key"]:
+        raise ValueError("unpublished ingestion directory identity")
     for name, expected in receipt["artifacts"].items():
         if name not in ("positions.parquet", "halo.parquet", "audit.parquet", "state.parquet"):
             raise ValueError("unexpected artifact name")
@@ -343,6 +364,9 @@ def ingest(
             "signature TEXT,outcome TEXT,scope TEXT,payload TEXT)"
         )
         db.execute("CREATE TABLE state (mmsi TEXT PRIMARY KEY,point TEXT,barrier INTEGER)")
+        db.execute(
+            "CREATE TABLE carried (mmsi TEXT PRIMARY KEY,time TEXT,signature TEXT,record_key TEXT)"
+        )
         if previous:
             for batch in pq.ParquetFile(carried_directory / "state.parquet").iter_batches(
                 batch_size=config.batch_rows
@@ -352,6 +376,17 @@ def ingest(
                         "INSERT INTO state VALUES (?,?,?)",
                         (entry["mmsi"], entry["last_point_json"], entry["barrier_seen"]),
                     )
+                    if entry["last_point_json"]:
+                        point = json.loads(entry["last_point_json"])
+                        db.execute(
+                            "INSERT INTO carried VALUES (?,?,?,?)",
+                            (
+                                entry["mmsi"],
+                                point["timestamp"],
+                                retained_signature(point),
+                                point["record_key"],
+                            ),
+                        )
         total = 0
         for item in sorted(inputs, key=lambda i: i.receipt.asset_id):
             adapter = MarineCadastreAdapter(item.receipt.source_era, config.naive_time_policy)
@@ -417,20 +452,7 @@ def ingest(
                     ):
                         scope, outcome = "outside", "filtered"
                         row["reasons"] = canonical(["outside_candidate_filter"])
-                signature = fingerprint(
-                    {
-                        k: row[k]
-                        for k in (
-                            "longitude",
-                            "latitude",
-                            "sog_knots",
-                            "raw_vessel_code",
-                            "equipment_class",
-                            "imo",
-                            "quality_flags",
-                        )
-                    }
-                )
+                signature = retained_signature(row)
                 row.update(outcome=outcome, scope=scope)
                 db.execute(
                     "INSERT INTO records VALUES (?,?,?,?,?,?,?)",
@@ -457,16 +479,26 @@ def ingest(
             writers[name] = BatchWriter(stage / f"{name}.parquet", SCHEMA, config.batch_rows)
         counts = Counter()
         cursor = db.execute(
-            "SELECT r.payload,g.variants,g.keeper FROM records r LEFT JOIN groups g "
-            "ON r.mmsi=g.mmsi AND r.time=g.time ORDER BY r.mmsi,r.time,r.key"
+            "SELECT r.payload,g.variants,g.keeper,c.record_key FROM records r LEFT JOIN groups g "
+            "ON r.mmsi=g.mmsi AND r.time=g.time LEFT JOIN carried c "
+            "ON r.mmsi=c.mmsi AND r.time=c.time AND r.signature<>c.signature "
+            "ORDER BY r.mmsi,r.time,r.key"
         )
         while batch := cursor.fetchmany(config.batch_rows):
-            for payload, variants, keeper in batch:
+            for payload, variants, keeper, carried_conflict in batch:
                 row = json.loads(payload)
-                if row["outcome"] in ("candidate", "filtered") and variants > 1:
+                if row["outcome"] in ("candidate", "filtered") and (
+                    variants > 1 or carried_conflict
+                ):
                     row["outcome"] = "rejected"
                     row["reasons"] = canonical(
-                        json.loads(row["reasons"]) + ["simultaneous_identity_position_conflict"]
+                        json.loads(row["reasons"])
+                        + ["simultaneous_identity_position_conflict"]
+                        + (
+                            [f"carried_endpoint_conflict:{carried_conflict}"]
+                            if carried_conflict
+                            else []
+                        )
                     )
                 elif row["outcome"] == "candidate":
                     row["outcome"] = "accepted" if row["record_key"] == keeper else "duplicate"
@@ -475,6 +507,9 @@ def ingest(
                 mmsi = row["mmsi"]
                 if len(mmsi) == 9 and mmsi.isascii() and mmsi.isdigit():
                     db.execute("INSERT OR IGNORE INTO state VALUES (?,NULL,0)", (mmsi,))
+                    if carried_conflict:
+                        # Preserve the conflict barrier, but retire the contradictory endpoint.
+                        db.execute("UPDATE state SET point=NULL,barrier=1 WHERE mmsi=?", (mmsi,))
                     if row["outcome"] == "rejected":
                         db.execute("UPDATE state SET barrier=1 WHERE mmsi=?", (mmsi,))
                     elif row["outcome"] == "accepted" and when < config.core_end:
@@ -538,6 +573,7 @@ def ingest(
         os.rename(stage, final)
         return final
     except Exception as error:
+        (stage / "complete.json").unlink(missing_ok=True)
         db.close()
         for writer in writers.values():
             try:

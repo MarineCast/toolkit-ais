@@ -282,3 +282,96 @@ def test_cli_explicit_job_paths_strict_config_and_idempotence(tmp_path, capsys):
     assert json.loads(capsys.readouterr().out)["native_directory"] == first
     path.write_text('{"config": {}, "config": {}, "inputs": []}')
     assert main(["ingest-local", str(path), str(tmp_path / "bad")]) == 2
+
+
+@pytest.mark.parametrize("winner", (False, True))
+def test_failed_publication_rejected_by_verification_retry_and_carry(tmp_path, monkeypatch, winner):
+    import shutil
+
+    import ais_toolkit.ingestion as ingestion
+
+    item = local(tmp_path, "publish", [row()])
+    output = tmp_path / "out"
+
+    def failed_rename(stage, final):
+        if winner:
+            # Another same-key worker published the same deterministic artifacts first.
+            shutil.copytree(stage, final)
+        raise OSError("synthetic publication failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ingestion.os, "rename", failed_rename)
+        with pytest.raises(OSError, match="publication failure"):
+            ingest([item], config(), output)
+    stage = next(output.glob(".staging-*"))
+    assert (stage / "failure.json").exists()
+    assert not (stage / "complete.json").exists()
+    with pytest.raises(ValueError, match="failed/unpublished"):
+        verified_receipt(stage)
+    with pytest.raises(ValueError, match="failed/unpublished"):
+        ingest([item], config(), tmp_path / "carry", stage)
+    final = ingest([item], config(), output)
+    before = verified_receipt(final)
+    assert before["counts"] == {"accepted": 1}
+    assert ingest([item], config(), output) == final
+    assert verified_receipt(final) == before
+    # Verification also rejects old failed staging with a surviving completion marker.
+    shutil.copyfile(final / "complete.json", stage / "complete.json")
+    with pytest.raises(ValueError, match="failed/unpublished"):
+        verified_receipt(stage)
+    (stage / "failure.json").unlink()
+    with pytest.raises(ValueError, match="failed/unpublished"):
+        verified_receipt(stage)
+    marked = tmp_path / "marked" / final.name
+    shutil.copytree(final, marked)
+    (marked / "failure.json").write_text("{}")
+    with pytest.raises(ValueError, match="failed/unpublished"):
+        verified_receipt(marked)
+
+
+@pytest.mark.parametrize("conflicting", (False, True))
+def test_carried_endpoint_reconciled_with_halo_and_barrier_persists(tmp_path, conflicting):
+    prior = local(tmp_path, "prior", [row(base_date_time="2025-01-01T23:59:30Z")])
+    first = ingest([prior], config(), tmp_path / "first")
+    assert not table(first, "state")[0]["barrier_seen"]
+    halo = local(
+        tmp_path,
+        "halo",
+        [row(base_date_time="2025-01-01T23:59:30Z", longitude="20.2" if conflicting else "20")],
+    )
+    core = local(
+        tmp_path,
+        "core",
+        [
+            row(base_date_time="2025-01-01T23:59:30Z", longitude="20.2" if conflicting else "20"),
+            row(base_date_time="2025-01-02T00:00:00Z", longitude="20.4"),
+        ],
+    )
+    next_config = config(
+        partition_id="next",
+        core_start=START + timedelta(days=1),
+        core_end=START + timedelta(days=2),
+        halo_start=START + timedelta(days=1, minutes=-1),
+        halo_end=START + timedelta(days=2, minutes=1),
+    )
+    second = ingest([halo, core], next_config, tmp_path / "second", first)
+    reverse = ingest([core, halo], next_config, tmp_path / "reverse", first)
+    report = verified_receipt(second)
+    assert report == verified_receipt(reverse)
+    assert report["input_rows"] == sum(report["counts"].values()) == 3
+    assert report["counts"] == (
+        {"accepted": 1, "rejected": 2} if conflicting else {"accepted": 2, "duplicate": 1}
+    )
+    assert table(second, "state")[0]["barrier_seen"] is conflicting
+    assert len(table(second, "halo")) == (0 if conflicting else 1)
+    assert len(table(second, "positions")) == 1
+    audit = table(second, "audit")
+    assert {r["asset_id"] for r in audit} == {"halo", "core"}  # Carry is never a fabricated row.
+    if conflicting:
+        rejected = next(r for r in audit if r["outcome"] == "rejected")
+        prior_key = table(first, "positions")[0]["record_key"]
+        assert f"carried_endpoint_conflict:{prior_key}" in rejected["reasons"]
+    point = json.loads(table(second, "state")[0]["last_point_json"])
+    assert point["asset_id"] == "core"  # Later fixes retain the known barrier.
+    assert ingest([core, halo], next_config, tmp_path / "second", first) == second
+    assert verified_receipt(first)["counts"] == {"accepted": 1}

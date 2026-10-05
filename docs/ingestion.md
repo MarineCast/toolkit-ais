@@ -87,7 +87,12 @@ references remain in the current audit and referenced prior receipt/audit chain.
 Carried state requires a verified previous ingestion directory, identical filtering/time
 policy and adjacent core windows. All four prior artifact checksums are verified; the
 previous receipt checksum/run key enters the new identity. Carried points are endpoint
-context only, never fabricated new source rows or core observations. Cross-file overlaps
+context only, never fabricated new source rows or core observations. Matching incoming
+reports remain supplied observations, with duplicates reconciled among supplied rows.
+A different retained signature at the carried MMSI/time rejects the incoming report,
+records the prior endpoint record key in audit reasons and retires that endpoint from
+state. The prior receipt/audit chain retains its evidence. The conflict sets a barrier
+that later accepted core fixes cannot clear. Cross-file overlaps
 are reconciled within the provided window; half-open core ownership prevents day-boundary
 double emission. State can be stale and unresolved: future tracks must still validate gap,
 identity, adjacency and barriers. Arbitrary checkpoint chains, mixed policy, missing files
@@ -97,7 +102,10 @@ and nonadjacent windows are rejected; no inferred continuity or receiver coverag
 
 Sources, receipts, effective configuration, method/schema, producer SHA, core/halo bounds
 and prior receipt affect deterministic run identity. On retry, all completed artifact hashes
-must verify; corruption is an error, never an overwrite. Input order does not affect output
+must verify; corruption is an error, never an overwrite. The processing method is
+`offline-ingestion/0.2`; older-method checkpoints must be regenerated from local inputs,
+and are not silently reused. Verification rejects staging directories, failure markers
+and directories whose name does not match the receipt run key. Input order does not affect output
 row order, normalized outcomes, artifact bytes or receipt. Every writer closes before
 `complete.json`; a same-filesystem directory rename exposes the completed run atomically.
 Failed staging directories retain `failure.json` and have no completion marker. Concurrent
