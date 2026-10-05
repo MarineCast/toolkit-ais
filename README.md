@@ -3,8 +3,10 @@
 Independently installable, species-neutral normalization and contracts for future
 source-to-daily-H3 processing. Phase 2 adds **offline local ingestion** to private native
 Parquet using bounded batches and SQLite spill. Development/tests use synthetic fixtures
-only. There is no live acquisition, track reconstruction, H3 allocation, final daily
-product, regional qualification or consumer integration in this release.
+only. Phase 3 adds bounded local **estimated trajectories and direct R6/R7 contributions**
+from verified ingestion evidence. Scientific defaults and interpolation accuracy remain
+unqualified. Live acquisition, final daily products, regional qualification and consumer
+integration remain deferred.
 
 ```sh
 python -m venv .venv
@@ -24,7 +26,7 @@ python scripts/wheel_smoke.py dist-current
 When network access is unavailable, an environment with installed build/setuptools and
 pytest tools can use `python -m build --no-isolation` and
 `python scripts/wheel_smoke.py dist-current --offline-test-tools --wheelhouse /chosen/wheels`.
-The wheelhouse must contain compatible declared Arrow/Zstandard dependency wheels.
+The wheelhouse must contain compatible declared Arrow/Zstandard/H3/Shapely (and transitive NumPy) dependency wheels.
 Only pytest tool modules are copied into the temporary runner; the package and its runtime
 dependencies install into a fresh environment from wheels with no index access.
 
@@ -39,6 +41,19 @@ See [offline ingestion](docs/ingestion.md) for deliberate input/output paths, re
 halos, carried barriers, atomic completion, limits and runnable synthetic example. Use
 `ais ingest-local job.json /chosen/private/output --carried /chosen/previous/run` only with
 explicitly provisioned local inputs; the carried directory is optional for the first run.
+
+See [local estimated trajectories](docs/trajectories.md) for explicit gap/speed/coast/
+projection settings, direct H3 clipping, UTC/core ownership, unresolved identity episodes
+and numerical limits. `ais estimate-local job.json /chosen/private/output` emits private
+contributions and accepted/rejected ledgers. To run a fabricated example in a NEW directory:
+
+```sh
+python scripts/synthetic_trajectories.py /chosen/new-synthetic-workspace
+ais estimate-local /chosen/new-synthetic-workspace/trajectory-job.json /chosen/private-estimates
+```
+
+The script constructs fabricated Phase 2 evidence and a job; the CLI runs estimation.
+Its synthetic thresholds, coordinates and fake producer SHA are not study defaults.
 
 See [foundation contracts](docs/foundation.md) for schemas, metric semantics, source
 verification, unresolved choices and deferred work. Real AIS, vessel-level intermediates

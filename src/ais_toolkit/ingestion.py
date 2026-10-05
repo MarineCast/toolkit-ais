@@ -278,26 +278,54 @@ class BatchWriter:
             self.closed = True
 
 
-def verified_receipt(directory: Path) -> dict:
+def verified_receipt(
+    directory: Path,
+    *,
+    method=METHOD,
+    schema_version=SCHEMA_VERSION,
+    artifact_names=("positions.parquet", "halo.parquet", "audit.parquet", "state.parquet"),
+) -> dict:
     if directory.name.startswith(".staging-") or (directory / "failure.json").exists():
         raise ValueError("failed/unpublished ingestion directory")
     receipt = strict_json(directory / "complete.json")
     if (
         receipt["status"] != "complete"
-        or receipt["method"] != METHOD
-        or receipt["schema_version"] != SCHEMA_VERSION
+        or receipt["method"] != method
+        or receipt["schema_version"] != schema_version
     ):
         raise ValueError("incomplete/incompatible ingestion receipt")
     if directory.name != receipt["run_key"]:
         raise ValueError("unpublished ingestion directory identity")
     for name, expected in receipt["artifacts"].items():
-        if name not in ("positions.parquet", "halo.parquet", "audit.parquet", "state.parquet"):
+        if name not in artifact_names:
             raise ValueError("unexpected artifact name")
         if digest(directory / name) != expected:
             raise ValueError("completed artifact checksum mismatch")
-    if len(receipt["artifacts"]) != 4:
+    if set(receipt["artifacts"]) != set(artifact_names):
         raise ValueError("incomplete artifact receipt")
     return receipt
+
+
+def publish_result(stage: Path, final: Path, result: dict) -> None:
+    """Closed/checksummed artifacts become visible inside the private output root by rename."""
+    (stage / "complete.json").write_text(canonical(result))
+    os.chmod(stage / "complete.json", 0o600)
+    os.rename(stage, final)
+
+
+def mark_failed(stage: Path, error: Exception, method: str) -> None:
+    (stage / "complete.json").unlink(missing_ok=True)
+    (stage / "failure.json").write_text(
+        canonical(
+            {
+                "status": "failed",
+                "method": method,
+                "error_type": type(error).__name__,
+                "reason": str(error),
+            }
+        )
+    )
+    os.chmod(stage / "failure.json", 0o600)
 
 
 def ingest(
@@ -567,30 +595,16 @@ def ingest(
             "limitations": "native received-AIS candidates; unresolved vessel identity; "
             "barriers retained conservatively; no tracks/H3/receiver/fleet completeness",
         }
-        (stage / "complete.json").write_text(canonical(result))
-        os.chmod(stage / "complete.json", 0o600)
-        # Directory rename is the completion boundary on the same filesystem.
-        os.rename(stage, final)
+        publish_result(stage, final, result)
         return final
     except Exception as error:
-        (stage / "complete.json").unlink(missing_ok=True)
         db.close()
         for writer in writers.values():
             try:
                 writer.close()
             except Exception:
                 pass  # Failed staging artifacts are never published/reused.
-        (stage / "failure.json").write_text(
-            canonical(
-                {
-                    "status": "failed",
-                    "method": METHOD,
-                    "error_type": type(error).__name__,
-                    "reason": str(error),
-                }
-            )
-        )
-        os.chmod(stage / "failure.json", 0o600)
+        mark_failed(stage, error, METHOD)
         raise
 
 

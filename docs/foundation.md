@@ -9,7 +9,9 @@ No existing legacy data is read, removed, migrated or recertified.
 The subsequent [offline ingestion milestone](ingestion.md) implements local CSV/CSV.zst
 reading, disk-spilled reconciliation, private native Parquet, halo/carry state and atomic
 completion. Its implemented scope supersedes the ingestion/Parquet deferrals below; track
-science, exact allocation and final daily-product conformance remain deferred.
+science and final daily-product conformance remain deferred. The [local trajectory milestone](trajectories.md)
+adds bounded estimated trajectories and direct H3 contributions using unresolved source-MMSI
+episodes. Its separate native schema does not certify the resolved-identity contracts below.
 
 ## Source evidence, checked 2026-10-05
 

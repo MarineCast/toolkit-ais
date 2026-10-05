@@ -1,4 +1,4 @@
-"""Bounded validation and interfaces, not a reconstructed movement engine."""
+"""Foundation validation/interfaces; the bounded local engine lives in trajectories.py."""
 
 from collections import defaultdict
 from dataclasses import dataclass
