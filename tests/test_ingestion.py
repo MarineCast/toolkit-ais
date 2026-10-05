@@ -76,6 +76,32 @@ def table(directory, name):
     return pq.read_table(directory / f"{name}.parquet").to_pylist()
 
 
+@pytest.mark.parametrize("window_kib,accepted", ((2048, True), (1024, False)))
+def test_streaming_zstd_window_limit_units_and_complete_provider_date(
+    tmp_path, window_kib, accepted
+):
+    item = local(tmp_path, "synthetic-window", [row(base_date_time="2025-01-01 00:00:00")])
+    params = zstd.ZstdCompressionParameters.from_level(
+        3, window_log=21, write_content_size=0, write_checksum=1
+    )
+    encoder = zstd.ZstdCompressor(compression_params=params).compressobj()
+    packed = item.path.with_suffix(".csv.zst")
+    packed.write_bytes(encoder.compress(item.path.read_bytes()) + encoder.flush())
+    assert zstd.get_frame_parameters(packed.read_bytes()).window_size == 2 * 1024**2
+    item = replace(item, path=packed, receipt=replace(item.receipt, sha256=digest(packed)))
+    output = tmp_path / "output"
+    chosen = config(zstd_window_kib=window_kib, naive_time_policy="dictionary_utc")
+    if accepted:
+        result = ingest([item], chosen, output)
+        assert verified_receipt(result)["counts"] == {"accepted": 1}
+        assert table(result, "positions")[0]["timestamp"] == START
+    else:
+        with pytest.raises(zstd.ZstdError, match="too much memory"):
+            ingest([item], chosen, output)
+        assert not list(output.rglob("complete.json"))
+        assert len(list(output.glob(".staging-*/failure.json"))) == 1
+
+
 def test_cross_file_duplicate_conflict_exact_time_and_input_order(tmp_path):
     a = local(
         tmp_path,

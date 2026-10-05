@@ -9,11 +9,11 @@ from typing import Mapping, Protocol, Sequence
 from .contracts import ParseResult, Position, Provenance, utc
 
 DICTIONARY_VERSION = "NOAA-2026-07-31"
-ADAPTER_VERSION = "marinecadastre/0.1"
+ADAPTER_VERSION = "marinecadastre/0.2"
 # Full source event time, to the precision supported by datetime; never fill components.
 TIMESTAMP_PATTERN = re.compile(
-    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
-    r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})?"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}[T ](?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+    r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?"
 )
 LEGACY_HEADERS = (
     "MMSI",

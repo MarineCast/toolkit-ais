@@ -21,7 +21,7 @@ from .contracts import Provenance, utc
 from .processing import ProcessingManifest
 from .sources import SourcePartition
 
-METHOD = "offline-ingestion/0.2"
+METHOD = "offline-ingestion/0.3"
 SCHEMA_VERSION = "ais-ingestion/0.1"
 
 
@@ -136,7 +136,10 @@ def materialize(item: LocalInput, stage: Path, config: IngestionConfig) -> Path:
     target = stage / f"{fingerprint(item.receipt.asset_id)}.csv"
     total = 0
     read_hash = hashlib.sha256()
-    decoder = zstd.ZstdDecompressor(max_window_size=config.zstd_window_kib).decompressobj()
+    # The supported C/CFFI implementations pass this value directly to
+    # ZSTD_DCtx_setMaxWindowSize in bytes, despite the upstream KiB docstring.
+    # Keep our configuration in KiB and the effective bound at <=64 MiB.
+    decoder = zstd.ZstdDecompressor(max_window_size=config.zstd_window_kib * 1024).decompressobj()
     compressed = item.path.name.endswith(".csv.zst")
     if not compressed and item.path.suffix != ".csv":
         raise ValueError("local input must be CSV or single-frame CSV.zst")
