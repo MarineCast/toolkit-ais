@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "marinecast-ais"
-version = "0.1.0"
+version = "0.2.0"
 description = "Contract-first, offline AIS normalization foundation"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pyarrow>=20,<26", "zstandard>=0.23,<0.26"]
 
 [project.optional-dependencies]
 dev = ["build>=1.2", "ruff>=0.11", "pytest>=8"]

@@ -19,6 +19,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dist", type=Path)
     parser.add_argument(
+        "--wheelhouse", type=Path, help="offline wheels for declared runtime dependencies"
+    )
+    parser.add_argument(
         "--offline-test-tools",
         action="store_true",
         help="copy only installed pytest tools into the temporary runner",
@@ -32,9 +35,10 @@ def main() -> None:
     python = (
         directory / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     )
-    subprocess.run(
-        [str(python), "-m", "pip", "install", "--no-index", "--no-deps", str(wheels[0])], check=True
+    options = (
+        ["--no-index", "--find-links", str(args.wheelhouse.resolve())] if args.wheelhouse else []
     )
+    subprocess.run([str(python), "-m", "pip", "install", *options, str(wheels[0])], check=True)
     test_env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
     test_env.pop("PYTHONPATH", None)
     if args.offline_test_tools:

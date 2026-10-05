@@ -22,7 +22,7 @@ CATALOG = (
         "noaa_marinecadastre",
         "https://hub.marinecadastre.gov/pages/vesseltraffic",
         "CSV.zst (2015 onward); implemented parser eras start 2018",
-        "offline_parser_only",
+        "offline_local_ingestion",
         "no_acquisition_authorized",
         "US received AIS; regional/fleet completeness unverified",
     ),
