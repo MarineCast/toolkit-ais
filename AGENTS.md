@@ -50,3 +50,13 @@ For documentation-only work, inspect `git status --short` and the diff, verify r
 `git diff --check` from this repository. There are currently no established package tests to run.
 When adding executable behavior, add appropriate checks and document their exact commands here.
 Report tests actually run, unverified source acquisition, and any unrun integration paths.
+
+## Foundation checks (added 2026-10-05)
+
+The standalone `ais_toolkit` package now contains offline source parsers, typed native
+contracts and validation interfaces. Read `docs/foundation.md` before extending its science
+or output semantics. Run `python -m pip install -e '.[dev]'`, `pytest -q`, `ruff check .`,
+`ruff format --check .`, `python -m build`, and `python scripts/wheel_smoke.py dist`.
+The last command installs the wheel in a fresh temporary environment and runs synthetic
+tests outside the checkout. CI covers Python 3.11–3.14; local execution is separately reported.
+No source acquisition, full track engine, H3 allocation or consumer integration is implemented.
