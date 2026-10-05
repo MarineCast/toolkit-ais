@@ -1,0 +1,3 @@
+mmsi,base_date_time,longitude,latitude,sog,cog,heading,vessel_name,imo,call_sign,vessel_type,status,length,width,draft,cargo,transceiver
+000000001,2025-01-01T00:00:00Z,20,10,0,0,0,SYNTHETIC,,,999,,,,,,B
+000000001,2025-01-01T00:01:00Z,20,10,,0,0,SYNTHETIC,,,999,,,,,,B
