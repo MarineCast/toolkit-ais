@@ -26,6 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     ingestion.add_argument(
         "--carried", type=Path, help="previous verified adjacent-core ingestion directory"
     )
+    tracks = commands.add_parser(
+        "estimate-local", help="verified offline ingestion to private local estimated contributions"
+    )
+    tracks.add_argument("job", type=Path)
+    tracks.add_argument("output", type=Path)
     validate = commands.add_parser("validate-csv", help="bounded, offline CSV contract inspection")
     validate.add_argument("path", type=Path)
     validate.add_argument("--era", choices=("2018-2024", "2025+"), required=True)
@@ -34,6 +39,45 @@ def main(argv: list[str] | None = None) -> int:
     )
     validate.add_argument("--max-rows", type=int, default=10000)
     args = parser.parse_args(argv)
+    if args.command == "estimate-local":
+        import sqlite3
+
+        import pyarrow as pa
+        from shapely.errors import ShapelyError
+
+        from .trajectories import load_track_job, process_tracks
+
+        try:
+            source, config, geometry, ingestion_carry, carried = load_track_job(args.job)
+            completed = process_tracks(
+                source,
+                config,
+                geometry,
+                args.output,
+                ingestion_carry_directory=ingestion_carry,
+                carried_directory=carried,
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "complete",
+                        "native_directory": str(completed),
+                        "scope": "private estimated contributions; unresolved identity; no final daily products",
+                    }
+                )
+            )
+            return 0
+        except (
+            OSError,
+            ValueError,
+            TypeError,
+            KeyError,
+            sqlite3.Error,
+            pa.ArrowException,
+            ShapelyError,
+        ) as error:
+            print(json.dumps({"status": "failed", "reason": str(error)}))
+            return 2
     if args.command == "ingest-local":
         import sqlite3
 

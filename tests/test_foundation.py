@@ -115,6 +115,44 @@ def test_timestamp_naive_policy_and_utc_conversion():
     assert parsed(base_date_time="2025-01-01T01:00:00+01:00").position.timestamp == START
 
 
+@pytest.mark.parametrize("separator", ("T", " "))
+def test_complete_provider_timestamp_keeps_explicit_utc_policy(separator):
+    values = row(base_date_time=f"2025-01-01{separator}00:00:00")
+    rejected = MarineCadastreAdapter("2025+").parse(values, source())
+    assert rejected.rejection_reasons == ("invalid_or_naive_timestamp",)
+    accepted = MarineCadastreAdapter("2025+", "dictionary_utc").parse(values, source())
+    assert accepted.position.timestamp == START
+    assert accepted.position.quality_flags == ("source_dictionary_utc_assumed",)
+    aware = row(base_date_time=f"2025-01-01{separator}01:00:00+01:00")
+    assert MarineCadastreAdapter("2025+").parse(aware, source()).position.timestamp == START
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "2025-01-01 12",
+        "2025-01-01 12:30",
+        "2025-01-01 12:30Z",
+        "2025-01-01 12:30:00.1234567",
+        "2025-02-30 12:30:00",
+        "2025-01-01 24:00:00",
+        "2025-01-01 12:60:00",
+        "2025-01-01 12:30:60",
+        "2025-01-01  12:30:00",
+        "2025-01-01\t12:30:00",
+        "2025-01-01 12:30:00 trailing",
+        "2025-01-01 12:30:00+00:60",
+        "2025-01-01 12:30:00+24:00",
+    ),
+)
+def test_malformed_space_separated_source_dates_rejected(value):
+    result = MarineCadastreAdapter("2025+", "dictionary_utc").parse(
+        row(base_date_time=value), source()
+    )
+    assert result.position is None
+    assert result.rejection_reasons == ("invalid_or_naive_timestamp",)
+
+
 @pytest.mark.parametrize(
     "era,year,key", (("2018-2024", "2020", "BaseDateTime"), ("2025+", "2025", "base_date_time"))
 )

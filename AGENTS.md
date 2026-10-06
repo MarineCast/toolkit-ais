@@ -59,7 +59,7 @@ or output semantics. Run `python -m pip install -e '.[dev]'`, `pytest -q`, `ruff
 `ruff format --check .`, `python -m build`, and `python scripts/wheel_smoke.py dist`.
 The last command installs the wheel in a fresh temporary environment and runs synthetic
 tests outside the checkout. CI covers Python 3.11–3.14; local execution is separately reported.
-No source acquisition, full track engine, H3 allocation or consumer integration is implemented.
+No source acquisition, scientific qualification or consumer integration is implemented.
 
 ## Offline ingestion (Phase 2)
 
@@ -69,3 +69,11 @@ Arrow/Zstandard are declared runtime dependencies. Build into a fresh output dir
 e.g. `python -m build --outdir dist-current`, then run the wheel checker on that directory.
 For offline wheel validation, supply `--wheelhouse /chosen/wheels --offline-test-tools`.
 The output is native unresolved-identity evidence, not tracks, H3 or final application products.
+
+## Local trajectories and contributions (Phase 3)
+
+Read `docs/trajectories.md` before changing local geometry, barriers, identity episodes,
+H3 intersections or checkpoint policy. The gnomonic model is explicitly local/bounded;
+raw MMSI episodes remain unresolved identities. H3/Shapely are declared dependencies.
+Run the full synthetic suite and fresh outside-checkout wheel checks. Do not introduce
+real-source acquisition, defaults, dense time grids, navigation routing or causal claims.

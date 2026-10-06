@@ -53,6 +53,15 @@ has no national-throughput claim. EOF is checked and extra/concatenated frames r
 Many-frame delivery support requires an explicit follow-up. Checksums cover both the bytes
 actually read and the final source bytes, detecting ordinary concurrent source mutation.
 
+`zstd_window_kib` is an explicit KiB configuration value capped at 65,536 (64 MiB).
+It is multiplied by 1,024 for the supported python-zstandard 0.23–0.25 implementations,
+which pass `max_window_size` to `ZSTD_DCtx_setMaxWindowSize` in bytes. The upstream
+docstring describes KiB, but both C/CFFI implementation paths pass the value unchanged
+([0.25 C source](https://github.com/indygreg/python-zstandard/blob/0.25.0/c-ext/decompressor.c),
+[CFFI source](https://github.com/indygreg/python-zstandard/blob/0.25.0/zstandard/backend_cffi.py)).
+Synthetic streaming-frame tests exercise both a fitting 2 MiB window and its rejection
+under a smaller configured limit. The bound is retained, not disabled.
+
 SQLite orders/groups on spill disk with `temp_store=FILE` and an explicit page-cache cap.
 Python fetches bounded row batches; Parquet row groups use the same cap. The receipt reports
 maximum writer rows, Arrow table bytes and SQLite spill bytes. A 3,000-record synthetic test
@@ -103,7 +112,7 @@ and nonadjacent windows are rejected; no inferred continuity or receiver coverag
 Sources, receipts, effective configuration, method/schema, producer SHA, core/halo bounds
 and prior receipt affect deterministic run identity. On retry, all completed artifact hashes
 must verify; corruption is an error, never an overwrite. The processing method is
-`offline-ingestion/0.2`; older-method checkpoints must be regenerated from local inputs,
+`offline-ingestion/0.3`; older-method checkpoints must be regenerated from local inputs,
 and are not silently reused. Verification rejects staging directories, failure markers
 and directories whose name does not match the receipt run key. Input order does not affect output
 row order, normalized outcomes, artifact bytes or receipt. Every writer closes before

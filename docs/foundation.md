@@ -9,7 +9,9 @@ No existing legacy data is read, removed, migrated or recertified.
 The subsequent [offline ingestion milestone](ingestion.md) implements local CSV/CSV.zst
 reading, disk-spilled reconciliation, private native Parquet, halo/carry state and atomic
 completion. Its implemented scope supersedes the ingestion/Parquet deferrals below; track
-science, exact allocation and final daily-product conformance remain deferred.
+science and final daily-product conformance remain deferred. The [local trajectory milestone](trajectories.md)
+adds bounded estimated trajectories and direct H3 contributions using unresolved source-MMSI
+episodes. Its separate native schema does not certify the resolved-identity contracts below.
 
 ## Source evidence, checked 2026-10-05
 
@@ -52,8 +54,10 @@ to 0–99.9; legacy AIS 102.3 sentinel becomes unknown, never zero. Unknown vess
 equipment classes survive. Vessel function mapping is caller-supplied and versioned;
 there is no default behavior, fishing or whale-watch classification.
 
-Event timestamps require `YYYY-MM-DDTHH:MM:SS`, optionally 1–6 fractional digits and
-`Z` or a `±HH:MM` offset. Dictionary UTC policy supplies only the zone; it never invents
+Event timestamps require `YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DD HH:MM:SS`, optionally
+1–6 fractional digits and `Z` or a `±HH:MM` offset. Hours, minutes and seconds must be
+in their ordinary clock ranges; normalized overflow dates/times are rejected.
+Dictionary UTC policy supplies only the zone; it never invents
 time components. Greater-than-microsecond precision is rejected pending a native contract
 that can preserve it. CSV provenance records the physical starting line of each record,
 including quoted multiline values and blank-line offsets; the inspection cap counts
