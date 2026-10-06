@@ -1,5 +1,7 @@
 # AIS Toolkit
 
+<img src="docs/assets/ais-toolkit-banner.png" alt="Ink panorama of a coastal archipelago with vessels, AIS signal paths, and a shore antenna" width="100%">
+
 Independently installable, species-neutral normalization and contracts for future
 source-to-daily-H3 processing. Phase 2 adds **offline local ingestion** to private native
 Parquet using bounded batches and SQLite spill. Development/tests use synthetic fixtures
