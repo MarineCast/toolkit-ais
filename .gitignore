@@ -9,3 +9,4 @@ build/
 graphify-out/
 data/
 outputs/
+.DS_Store
